@@ -60,6 +60,13 @@ class TelegramService:
             async def worker():
                 await self.client.start(phone=self.phone)
                 self._log("Client started successfully.")
+                
+                # Save to a file for the user since terminal might be hidden
+                session_str = self.client.session.save()
+                with open("SESSION_STRING_FOR_RENDER.txt", "w") as f:
+                    f.write(session_str)
+                
+                self._log("Session string saved to SESSION_STRING_FOR_RENDER.txt")
                 self.ready_event.set()
                 
                 while True:
