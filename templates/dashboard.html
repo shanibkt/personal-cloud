@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<!-- Controls -->
+<div class="card">
+    <div style="display: flex; gap: 1rem; align-items: flex-end;">
+        <div style="flex: 1;">
+            <h3>Upload File</h3>
+            <form id="uploadForm" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="folder_id" value="{{ current_folder.id if current_folder else 'None' }}">
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="file" name="file" id="fileInput" class="form-control" required style="flex: 1;">
+                    <button type="submit" id="uploadBtn" class="btn btn-primary"><i class="fa-solid fa-upload"></i>
+                        Upload</button>
+                    <button type="button" id="bulkDeleteBtn" class="btn btn-danger" style="display: none;"
+                        onclick="submitBulkDelete()">
+                        <i class="fa-solid fa-trash"></i> Delete Selected
+                    </button>
+                </div>
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text" id="progressText">0% Uploaded</div>
+            </form>
+        </div>
+        <div style="flex: 1;">
+            <h3>New Folder</h3>
+            <form action="{{ url_for('create_folder') }}" method="post">
+                <input type="hidden" name="parent_id" value="{{ current_folder.id if current_folder else 'None' }}">
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" name="name" placeholder="Folder Name" class="form-control" required>
+                    <button type="submit" class="btn"><i class="fa-solid fa-folder-plus"></i> Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Breadcrumbs -->
+<div class="breadcrumbs">
+    <span class="breadcrumb-item"><a href="{{ url_for('dashboard') }}"><i class="fa-solid fa-home"></i> Home</a></span>
+    {% for folder in breadcrumbs %}
+    <span class="breadcrumb-separator">/</span>
+    <span class="breadcrumb-item"><a href="{{ url_for('dashboard', folder_id=folder.id) }}">{{ folder.name }}</a></span>
+    {% endfor %}
+</div>
+
+<!-- Files and Folders -->
+<div class="file-grid">
+    <!-- Folders -->
+    {% for folder in folders %}
+    <a href="{{ url_for('dashboard', folder_id=folder.id) }}" style="text-decoration: none; color: inherit;">
+        <div class="file-item">
+            <div class="file-icon folder-icon">
+                <i class="fa-solid fa-folder"></i>
+            </div>
+            <div class="file-name">{{ folder.name }}</div>
+            <div class="file-meta">Folder</div>
+        </div>
+    </a>
+    {% endfor %}
+
+    <!-- Files -->
+    <form id="bulkForm" action="/bulk_delete_files" method="post" style="display: contents;">
+        {% for file in files %}
+        <div class="file-item" style="position: relative;">
+            <input type="checkbox" name="file_ids" value="{{ file.id }}" class="file-checkbox"
+                onchange="toggleBulkBtn()"
+                style="position: absolute; top: 10px; left: 10px; width: 1.2rem; height: 1.2rem; cursor: pointer; z-index: 10;">
+
+            <div class="file-icon">
+                <i class="fa-solid fa-file"></i>
+            </div>
+            <div class="file-name">{{ file.name }}</div>
+            <div class="file-meta">
+                {{ (file.size / 1024 / 1024)|round(2) }} MB
+                {% if file.telegram_id == 0 %}
+                <span style="color: #fbbf24; display: block;">(Uploading...)</span>
+                {% endif %}
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; width: 100%; margin-top: auto;">
+                <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-primary"
+                    style="flex: 2; justify-content: center;">
+                    <i class="fa-solid fa-download"></i>
+                </a>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete('{{ file.id }}', '{{ file.name }}')"
+                    style="flex: 1; justify-content: center;">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </form>
+</div>
+
+<!-- Hidden forms for individual deletion -->
+{% for file in files %}
+<form id="delete-form-{{ file.id }}" action="/delete_file/{{ file.id }}" method="post" style="display: none;"></form>
+{% endfor %}
+
+{% if not folders and not files %}
+<div class="upload-area" style="margin-top: 2rem;">
+    <div style="color: var(--text-secondary);">
+        <i class="fa-solid fa-cloud-arrow-up" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+        <p>This folder is empty. Upload a file above.</p>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('uploadForm').onsubmit = function (event) {
+        event.preventDefault();
+
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput.files.length === 0) return;
+
+        const form = event.target;
+        const formData = new FormData(form);
+
+        // Unique Task ID
+        const taskId = 'task_' + Date.now();
+        formData.append('task_id', taskId);
+
+        const xhr = new XMLHttpRequest();
+        const container = document.getElementById('progressContainer');
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressText');
+        const btn = document.getElementById('uploadBtn');
+
+        container.style.display = 'block';
+        text.style.display = 'block';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+
+        xhr.upload.addEventListener('progress', function (e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                bar.style.width = (percent / 2) + '%';
+                text.innerText = `Sending to server: ${percent}%`;
+            }
+        });
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 202) {
+                    text.innerText = 'Now Uploading to Telegram (0%)...';
+                    startTelegramPolling(taskId);
+                } else {
+                    alert('Upload failed at server stage.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-upload"></i> Upload';
+                }
+            }
+        };
+
+        xhr.open('POST', form.action, true);
+        xhr.send(formData);
+    };
+
+    function startTelegramPolling(taskId) {
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressText');
+
+        const pollInterval = setInterval(() => {
+            fetch(`/upload_progress/${taskId}`)
+                .then(res => res.json())
+                .then(data => {
+                    const tgPercent = data.progress;
+
+                    if (tgPercent === -1) {
+                        text.innerText = 'Error: Telegram upload failed!';
+                        clearInterval(pollInterval);
+                        return;
+                    }
+
+                    const totalPercent = 50 + (tgPercent / 2);
+                    bar.style.width = totalPercent + '%';
+                    text.innerText = `Telegram Progress: ${tgPercent}%`;
+
+                    if (tgPercent >= 100) {
+                        text.innerText = 'Finalizing...';
+                        clearInterval(pollInterval);
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                })
+                .catch(e => console.error("Poll Error", e));
+        }, 1500);
+    }
+
+    function confirmDelete(id, name) {
+        if (confirm(`Are you sure you want to delete "${name}"?`)) {
+            document.getElementById(`delete-form-${id}`).submit();
+        }
+    }
+
+    function toggleBulkBtn() {
+        const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        const btn = document.getElementById('bulkDeleteBtn');
+        btn.style.display = checkboxes.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    function submitBulkDelete() {
+        if (confirm('Delete all selected files?')) {
+            document.getElementById('bulkForm').submit();
+        }
+    }
+</script>
+{% endblock %}

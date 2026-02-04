@@ -1,0 +1,6 @@
+flask
+flask-sqlalchemy
+telethon
+werkzeug
+gunicorn
+python-dotenv
