@@ -1,0 +1,18 @@
+# Local database
+*.db
+
+# Telegram sessions
+*.session
+*.session-journal
+SESSION_STRING_FOR_RENDER.txt
+
+# Environment variables
+.env
+
+# Uploads folder
+uploads/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
