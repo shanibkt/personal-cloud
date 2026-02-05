@@ -67,32 +67,43 @@ class TelegramService:
                 self.loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self.loop)
                 
-                # Use absolute path for session name to avoid issues on PythonAnywhere
+                # Use a specific session folder on PythonAnywhere
                 basedir = os.path.dirname(os.path.abspath(__file__))
-                session_path = os.path.join(basedir, Config.SESSION_NAME)
+                session_dir = os.path.join(basedir, "sessions")
+                if not os.path.exists(session_dir):
+                    os.makedirs(session_dir)
                 
+                session_path = os.path.join(session_dir, Config.SESSION_NAME)
                 session = StringSession(self.session_string) if self.session_string else session_path
                 
                 # Proxy configuration for PythonAnywhere free tier
                 proxy = None
                 if Config.IS_PYTHONANYWHERE:
-                    import socks # Part of PySocks
-                    proxy = (socks.HTTP, Config.PROXY_HOST, Config.PROXY_PORT)
-                    self._log(f"Using proxy: {Config.PROXY_HOST}:{Config.PROXY_PORT}")
+                    try:
+                        import socks # Part of PySocks
+                        proxy = (socks.HTTP, Config.PROXY_HOST, Config.PROXY_PORT)
+                        self._log(f"Using proxy: {Config.PROXY_HOST}:{Config.PROXY_PORT}")
+                    except ImportError:
+                        self._log("PySocks NOT INSTALLED! Proxy will not work.")
                 
                 self.client = TelegramClient(session, self.api_id, self.api_hash, loop=self.loop, proxy=proxy)
                 
                 async def worker():
                     try:
-                        await self.client.start(phone=self.phone)
-                        self._log("Client started successfully.")
+                        self._log("Connecting to Telegram...")
+                        await self.client.connect()
                         
-                        # Save to a file for the user since terminal might be hidden
+                        if not await self.client.is_user_authorized():
+                            self._log("USER NOT AUTHORIZED! Please run run_auth.py locally and copy the Session String.")
+                        else:
+                            self._log("Client connected and authorized successfully.")
+                        
+                        # Save session string just in case
                         session_str = self.client.session.save()
-                        with open("SESSION_STRING_FOR_RENDER.txt", "w") as f:
+                        with open(os.path.join(basedir, "SESSION_STRING_FOR_RENDER.txt"), "w") as f:
                             f.write(session_str)
                         
-                        self._log("Session string saved to SESSION_STRING_FOR_RENDER.txt")
+                        self._log("Session string saved.")
                         self.ready_event.set()
                         
                         while True:
@@ -162,7 +173,7 @@ class TelegramService:
                                 await asyncio.sleep(1)
                     except Exception as e:
                         self._log(f"Worker startup error: {e}")
-                        self.ready_event.set() # Set it anyway so web app doesn't hang forever
+                        self.ready_event.set() 
 
                 self.loop.run_until_complete(worker())
             except Exception as e:
@@ -171,7 +182,8 @@ class TelegramService:
 
         self.thread = threading.Thread(target=run_loop, daemon=True)
         self.thread.start()
-        self.ready_event.wait(timeout=20)
+        # Wait longer for connection through proxy
+        self.ready_event.wait(timeout=40)
 
     def _send_request(self, cmd, args):
         if not self.ready_event.is_set():

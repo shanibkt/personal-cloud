@@ -26,6 +26,6 @@ class Config:
     UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
 
     # PythonAnywhere Proxy Settings
-    IS_PYTHONANYWHERE = 'PYTHONANYWHERE_DOMAIN' in os.environ
+    IS_PYTHONANYWHERE = os.path.exists('/var/www') and ('pythonanywhere' in os.getcwd().lower() or 'Shanib' in os.getcwd())
     PROXY_HOST = 'proxy.server'
     PROXY_PORT = 3128

@@ -29,9 +29,13 @@ def debug_status():
         "API_HASH_LOADED": bool(Config.API_HASH),
         "PHONE_NUMBER_LOADED": bool(Config.PHONE_NUMBER),
         "SESSION_STRING_LOADED": bool(Config.SESSION_STRING),
+        "IS_PYTHONANYWHERE": Config.IS_PYTHONANYWHERE,
+        "ENV_KEYS": list(os.environ.keys()),
         "TELEGRAM_READY": telegram_service.ready_event.is_set(),
         "THREAD_ALIVE": telegram_service.thread.is_alive() if telegram_service.thread else False,
-        "LOG_TAIL": []
+        "LOG_TAIL": [],
+        "UPLOAD_FOLDER": Config.UPLOAD_FOLDER,
+        "CWD": os.getcwd()
     }
     
     try:
