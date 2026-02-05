@@ -22,6 +22,27 @@ def log_debug(msg):
     print(f"[Web] {msg}")
     sys.stdout.flush()
 
+@app.route('/debug_status')
+def debug_status():
+    status = {
+        "API_ID_LOADED": bool(Config.API_ID),
+        "API_HASH_LOADED": bool(Config.API_HASH),
+        "PHONE_NUMBER_LOADED": bool(Config.PHONE_NUMBER),
+        "SESSION_STRING_LOADED": bool(Config.SESSION_STRING),
+        "TELEGRAM_READY": telegram_service.ready_event.is_set(),
+        "THREAD_ALIVE": telegram_service.thread.is_alive() if telegram_service.thread else False,
+        "LOG_TAIL": []
+    }
+    
+    try:
+        if os.path.exists("telegram_service.log"):
+            with open("telegram_service.log", "r") as f:
+                status["LOG_TAIL"] = f.readlines()[-20:]
+    except Exception as e:
+        status["LOG_ERROR"] = str(e)
+        
+    return jsonify(status)
+
 @app.route('/')
 def index():
     return redirect(url_for('dashboard'))
