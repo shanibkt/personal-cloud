@@ -183,12 +183,16 @@ class TelegramService:
 
         self.thread = threading.Thread(target=run_loop, daemon=True)
         self.thread.start()
-        # Wait longer for connection through proxy
-        self.ready_event.wait(timeout=40)
+        # Do NOT wait here; let the web server finish starting up.
+        # We will wait inside _send_request only when a real request comes in.
 
     def _send_request(self, cmd, args):
+        # If the service isn't ready, wait up to 45 seconds (important for slow proxy connections)
         if not self.ready_event.is_set():
-            raise Exception("Telegram service is sleeping or not initialized.")
+            self._log("Service not ready yet, waiting...")
+            if not self.ready_event.wait(timeout=45):
+                raise Exception("Telegram service is sleeping or not initialized. Check your credentials and connection.")
+        
         thread_id = threading.get_ident()
         res_q = queue.Queue()
         self.result_queues[thread_id] = res_q
