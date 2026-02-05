@@ -4,3 +4,4 @@ telethon
 werkzeug
 gunicorn
 python-dotenv
+PySocks

@@ -72,7 +72,15 @@ class TelegramService:
                 session_path = os.path.join(basedir, Config.SESSION_NAME)
                 
                 session = StringSession(self.session_string) if self.session_string else session_path
-                self.client = TelegramClient(session, self.api_id, self.api_hash, loop=self.loop)
+                
+                # Proxy configuration for PythonAnywhere free tier
+                proxy = None
+                if Config.IS_PYTHONANYWHERE:
+                    import socks # Part of PySocks
+                    proxy = (socks.HTTP, Config.PROXY_HOST, Config.PROXY_PORT)
+                    self._log(f"Using proxy: {Config.PROXY_HOST}:{Config.PROXY_PORT}")
+                
+                self.client = TelegramClient(session, self.api_id, self.api_hash, loop=self.loop, proxy=proxy)
                 
                 async def worker():
                     try:

@@ -24,3 +24,8 @@ class Config:
     
     # Upload/Download Config
     UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
+
+    # PythonAnywhere Proxy Settings
+    IS_PYTHONANYWHERE = 'PYTHONANYWHERE_DOMAIN' in os.environ
+    PROXY_HOST = 'proxy.server'
+    PROXY_PORT = 3128
