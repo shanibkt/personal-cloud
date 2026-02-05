@@ -77,39 +77,43 @@ class TelegramService:
                 session_path = os.path.join(session_dir, Config.SESSION_NAME)
                 session = StringSession(self.session_string) if self.session_string else session_path
                 
-                # Proxy configuration for PythonAnywhere free tier
+                # Proxy configuration with remote DNS enabled
                 proxy = None
                 if Config.IS_PYTHONANYWHERE:
                     try:
-                        import socks # Part of PySocks
-                        proxy = (socks.HTTP, Config.PROXY_HOST, Config.PROXY_PORT)
-                        self._log(f"Using proxy: {Config.PROXY_HOST}:{Config.PROXY_PORT}")
+                        import socks
+                        # The 4th argument 'True' enables remote DNS (rdns)
+                        proxy = (socks.HTTP, Config.PROXY_HOST, Config.PROXY_PORT, True)
+                        self._log(f"Using PA Proxy: {Config.PROXY_HOST}:{Config.PROXY_PORT} with RDNS")
                     except ImportError:
                         self._log("PySocks NOT INSTALLED! Proxy will not work.")
                 
-                self.client = TelegramClient(session, self.api_id, self.api_hash, loop=self.loop, proxy=proxy)
+                from telethon import connection
+                self.client = TelegramClient(
+                    session, 
+                    self.api_id, 
+                    self.api_hash, 
+                    loop=self.loop, 
+                    proxy=proxy,
+                    connection=connection.ConnectionTcpAbridged
+                )
                 
                 async def worker():
                     try:
-                        self._log("Connecting to Telegram...")
-                        await self.client.connect()
+                        self._log("Connecting to Telegram (Abridged)...")
+                        # Try to connect with a longer timeout
+                        await asyncio.wait_for(self.client.connect(), timeout=30)
                         
                         authorized = await self.client.is_user_authorized()
                         if not authorized:
-                            self._log("!!! USER NOT AUTHORIZED !!! Telegram is waiting for a code.")
-                            self._log("On PythonAnywhere, you CANNOT enter the code interactively.")
-                            self._log("ACTION REQUIRED: Run 'python run_auth.py' on your LOCAL computer, ")
-                            self._log("then copy the SESSION STRING to your server's .env file.")
+                            self._log("!!! AUTH ERROR: Session String might be invalid or expired.")
+                            self._log("Please generate a NEW ONE using run_auth.py locally.")
                         else:
                             self._log("Client connected and authorized successfully.")
                         
-                        # Set it regardless so the web app doesn't hang
                         self.ready_event.set()
+                        if not authorized: return
                         
-                        if not authorized:
-                            return # Cannot proceed without auth
-                        
-                        # Save session string just in case
                         session_str = self.client.session.save()
                         with open(os.path.join(basedir, "SESSION_STRING_FOR_RENDER.txt"), "w") as f:
                             f.write(session_str)
