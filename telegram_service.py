@@ -94,10 +94,20 @@ class TelegramService:
                         self._log("Connecting to Telegram...")
                         await self.client.connect()
                         
-                        if not await self.client.is_user_authorized():
-                            self._log("USER NOT AUTHORIZED! Please run run_auth.py locally and copy the Session String.")
+                        authorized = await self.client.is_user_authorized()
+                        if not authorized:
+                            self._log("!!! USER NOT AUTHORIZED !!! Telegram is waiting for a code.")
+                            self._log("On PythonAnywhere, you CANNOT enter the code interactively.")
+                            self._log("ACTION REQUIRED: Run 'python run_auth.py' on your LOCAL computer, ")
+                            self._log("then copy the SESSION STRING to your server's .env file.")
                         else:
                             self._log("Client connected and authorized successfully.")
+                        
+                        # Set it regardless so the web app doesn't hang
+                        self.ready_event.set()
+                        
+                        if not authorized:
+                            return # Cannot proceed without auth
                         
                         # Save session string just in case
                         session_str = self.client.session.save()
