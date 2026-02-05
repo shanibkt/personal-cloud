@@ -1,7 +1,9 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from the same directory as this file
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key'
@@ -10,7 +12,7 @@ class Config:
     if database_url and database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
-    SQLALCHEMY_DATABASE_URI = database_url or 'sqlite:///file_storage.db'
+    SQLALCHEMY_DATABASE_URI = database_url or f'sqlite:///{os.path.join(basedir, "instance", "file_storage.db")}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Telegram Credentials
@@ -21,4 +23,4 @@ class Config:
     SESSION_NAME = 'cloud_backup_v4'
     
     # Upload/Download Config
-    UPLOAD_FOLDER = 'uploads'
+    UPLOAD_FOLDER = os.path.join(basedir, 'uploads')

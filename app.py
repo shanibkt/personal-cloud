@@ -164,8 +164,10 @@ def download_file(file_id):
         flash(f'Download failed: {str(e)}')
         return redirect(request.referrer)
 
+# Initialize Telegram Service
+telegram_service.start(app)
+
 if __name__ == '__main__':
     log_debug("Starting application...")
-    telegram_service.start(app)
     # host='0.0.0.0' allows access from other devices on your Wi-Fi (like your phone)
     app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5002, threaded=True)

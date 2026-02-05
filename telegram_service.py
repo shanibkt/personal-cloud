@@ -40,8 +40,16 @@ class TelegramService:
         return self.progress_data.get(task_id, 0)
 
     def _log(self, msg):
-        print(f"[TelegramService] {msg}")
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        log_msg = f"[{timestamp}] [TelegramService] {msg}"
+        print(log_msg)
         sys.stdout.flush()
+        # Also log to a file for persistence on PythonAnywhere
+        try:
+            with open("telegram_service.log", "a") as f:
+                f.write(log_msg + "\n")
+        except:
+            pass
 
     def start(self, flask_app=None):
         """Starts the background thread with its own asyncio loop."""
@@ -49,93 +57,109 @@ class TelegramService:
         if self.thread and self.thread.is_alive():
             return
 
+        if not self.api_id or not self.api_hash:
+            self._log("CRITICAL ERROR: API_ID or API_HASH missing from environment variables!")
+            return
+
         def run_loop():
-            self._log("Starting background thread...")
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-            
-            session = StringSession(self.session_string) if self.session_string else Config.SESSION_NAME
-            self.client = TelegramClient(session, self.api_id, self.api_hash, loop=self.loop)
-            
-            async def worker():
-                await self.client.start(phone=self.phone)
-                self._log("Client started successfully.")
+            try:
+                self._log("Starting background thread...")
+                self.loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self.loop)
                 
-                # Save to a file for the user since terminal might be hidden
-                session_str = self.client.session.save()
-                with open("SESSION_STRING_FOR_RENDER.txt", "w") as f:
-                    f.write(session_str)
+                # Use absolute path for session name to avoid issues on PythonAnywhere
+                basedir = os.path.dirname(os.path.abspath(__file__))
+                session_path = os.path.join(basedir, Config.SESSION_NAME)
                 
-                self._log("Session string saved to SESSION_STRING_FOR_RENDER.txt")
-                self.ready_event.set()
+                session = StringSession(self.session_string) if self.session_string else session_path
+                self.client = TelegramClient(session, self.api_id, self.api_hash, loop=self.loop)
                 
-                while True:
+                async def worker():
                     try:
-                        try:
-                            req = self.request_queue.get_nowait()
-                        except queue.Empty:
-                            await asyncio.sleep(0.1)
-                            continue
-                            
-                        thread_id, cmd, args = req
-                        self._log(f"Processing command: {cmd}")
+                        await self.client.start(phone=self.phone)
+                        self._log("Client started successfully.")
                         
-                        try:
-                            if cmd == 'upload':
-                                task_id = args.get('task_id', thread_id)
-                                db_file_id = args.get('db_file_id')
-                                self.progress_data[task_id] = 0
+                        # Save to a file for the user since terminal might be hidden
+                        session_str = self.client.session.save()
+                        with open("SESSION_STRING_FOR_RENDER.txt", "w") as f:
+                            f.write(session_str)
+                        
+                        self._log("Session string saved to SESSION_STRING_FOR_RENDER.txt")
+                        self.ready_event.set()
+                        
+                        while True:
+                            try:
+                                try:
+                                    req = self.request_queue.get_nowait()
+                                except queue.Empty:
+                                    await asyncio.sleep(0.1)
+                                    continue
+                                    
+                                thread_id, cmd, args = req
+                                self._log(f"Processing command: {cmd}")
                                 
-                                msg = await self.client.send_file(
-                                    'me', 
-                                    args['path'],
-                                    progress_callback=lambda c, t: self._progress_callback(c, t, task_id)
-                                )
-                                
-                                self.progress_data[task_id] = 100
-                                self._log(f"Upload done for task {task_id}. Msg ID: {msg.id}")
-
-                                # Update Database
-                                if self.app and db_file_id:
-                                    from database import db, File
-                                    with self.app.app_context():
-                                        file_record = File.query.get(db_file_id)
-                                        if file_record:
-                                            file_record.telegram_id = msg.id
-                                            file_record.chat_id = msg.chat_id
-                                            db.session.commit()
-                                            self._log(f"Database updated for file {db_file_id}")
-
-                                if os.path.exists(args['path']):
-                                    os.remove(args['path'])
-                                
-                                if thread_id in self.result_queues:
-                                    self.result_queues[thread_id].put(('ok', {'id': msg.id}))
-
-                            elif cmd == 'download':
-                                message = await self.client.get_messages('me', ids=args['msg_id'])
-                                if message:
-                                    await self.client.download_media(message, args['output'])
-                                    self.result_queues[thread_id].put(('ok', None))
-                                else:
-                                    self.result_queues[thread_id].put(('error', "Message not found"))
-
-                            elif cmd == 'delete':
-                                await self.client.delete_messages('me', args['msg_ids'])
-                                self.result_queues[thread_id].put(('ok', None))
-                                
-                        except Exception as e:
-                            self._log(f"Error in command {cmd}: {e}")
-                            if thread_id in self.result_queues:
-                                self.result_queues[thread_id].put(('error', str(e)))
-                            if cmd == 'upload':
-                                self.progress_data[args.get('task_id', thread_id)] = -1
-                            
+                                try:
+                                    if cmd == 'upload':
+                                        task_id = args.get('task_id', thread_id)
+                                        db_file_id = args.get('db_file_id')
+                                        self.progress_data[task_id] = 0
+                                        
+                                        msg = await self.client.send_file(
+                                            'me', 
+                                            args['path'],
+                                            progress_callback=lambda c, t: self._progress_callback(c, t, task_id)
+                                        )
+                                        
+                                        self.progress_data[task_id] = 100
+                                        self._log(f"Upload done for task {task_id}. Msg ID: {msg.id}")
+        
+                                        # Update Database
+                                        if self.app and db_file_id:
+                                            from database import db, File
+                                            with self.app.app_context():
+                                                file_record = File.query.get(db_file_id)
+                                                if file_record:
+                                                    file_record.telegram_id = msg.id
+                                                    file_record.chat_id = msg.chat_id
+                                                    db.session.commit()
+                                                    self._log(f"Database updated for file {db_file_id}")
+        
+                                        if os.path.exists(args['path']):
+                                            os.remove(args['path'])
+                                        
+                                        if thread_id in self.result_queues:
+                                            self.result_queues[thread_id].put(('ok', {'id': msg.id}))
+        
+                                    elif cmd == 'download':
+                                        message = await self.client.get_messages('me', ids=args['msg_id'])
+                                        if message:
+                                            await self.client.download_media(message, args['output'])
+                                            self.result_queues[thread_id].put(('ok', None))
+                                        else:
+                                            self.result_queues[thread_id].put(('error', "Message not found"))
+        
+                                    elif cmd == 'delete':
+                                        await self.client.delete_messages('me', args['msg_ids'])
+                                        self.result_queues[thread_id].put(('ok', None))
+                                        
+                                except Exception as e:
+                                    self._log(f"Error in command {cmd}: {e}")
+                                    if thread_id in self.result_queues:
+                                        self.result_queues[thread_id].put(('error', str(e)))
+                                    if cmd == 'upload':
+                                        self.progress_data[args.get('task_id', thread_id)] = -1
+                                    
+                            except Exception as e:
+                                self._log(f"Worker loop error: {e}")
+                                await asyncio.sleep(1)
                     except Exception as e:
-                        self._log(f"Worker loop error: {e}")
-                        await asyncio.sleep(1)
+                        self._log(f"Worker startup error: {e}")
+                        self.ready_event.set() # Set it anyway so web app doesn't hang forever
 
-            self.loop.run_until_complete(worker())
+                self.loop.run_until_complete(worker())
+            except Exception as e:
+                self._log(f"Background thread crash: {e}")
+                self.ready_event.set()
 
         self.thread = threading.Thread(target=run_loop, daemon=True)
         self.thread.start()
