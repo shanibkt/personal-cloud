@@ -37,8 +37,29 @@ def debug_status():
         "THREAD_ALIVE": telegram_service.thread.is_alive() if telegram_service.thread else False,
         "LOG_TAIL": [],
         "UPLOAD_FOLDER": Config.UPLOAD_FOLDER,
-        "CWD": os.getcwd()
+        "CWD": os.getcwd(),
+        "NETWORK_CHECK": {}
     }
+    
+    # Test outbound connectivity
+    import requests
+    try:
+        # Test Bot API (should be whitelisted)
+        bot_api_check = requests.get("https://api.telegram.org", timeout=5)
+        status["NETWORK_CHECK"]["BOT_API_DIRECT"] = bot_api_check.status_code
+    except Exception as e:
+        status["NETWORK_CHECK"]["BOT_API_DIRECT_ERROR"] = str(e)
+
+    try:
+        # Test through proxy
+        proxies = {
+            "http": f"http://{Config.PROXY_HOST}:{Config.PROXY_PORT}",
+            "https": f"http://{Config.PROXY_HOST}:{Config.PROXY_PORT}"
+        }
+        bot_api_proxy_check = requests.get("https://api.telegram.org", proxies=proxies, timeout=5)
+        status["NETWORK_CHECK"]["BOT_API_PROXY"] = bot_api_proxy_check.status_code
+    except Exception as e:
+        status["NETWORK_CHECK"]["BOT_API_PROXY_ERROR"] = str(e)
     
     try:
         if os.path.exists("telegram_service.log"):
