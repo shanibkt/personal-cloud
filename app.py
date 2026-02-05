@@ -28,6 +28,8 @@ def debug_status():
         "API_ID_LOADED": bool(Config.API_ID),
         "API_HASH_LOADED": bool(Config.API_HASH),
         "PHONE_NUMBER_LOADED": bool(Config.PHONE_NUMBER),
+        "ENV_FILE_EXISTS": getattr(Config, 'DOTENV_EXISTS', 'unknown'),
+        "ENV_FILE_LOADED": getattr(Config, 'DOTENV_LOADED', 'unknown'),
         "SESSION_STRING_LOADED": bool(Config.SESSION_STRING),
         "IS_PYTHONANYWHERE": Config.IS_PYTHONANYWHERE,
         "ENV_KEYS": list(os.environ.keys()),

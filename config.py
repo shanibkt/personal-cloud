@@ -1,11 +1,15 @@
 import os
 from dotenv import load_dotenv
 
-# Load .env from the same directory as this file
-basedir = os.path.abspath(os.path.dirname(__file__))
-load_dotenv(os.path.join(basedir, '.env'))
+# Load environment variables
+from dotenv import load_dotenv
 
 class Config:
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    env_path = os.path.join(basedir, '.env')
+    DOTENV_LOADED = load_dotenv(env_path)
+    DOTENV_EXISTS = os.path.exists(env_path)
+    
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key'
     # If DATABASE_URL is set (like on Render), use it. Otherwise use SQLite.
     database_url = os.environ.get('DATABASE_URL')

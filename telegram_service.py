@@ -59,6 +59,7 @@ class TelegramService:
 
         if not self.api_id or not self.api_hash:
             self._log("CRITICAL ERROR: API_ID or API_HASH missing from environment variables!")
+            self.ready_event.set() # Set it so the app doesn't show "sleeping" but can show specific errors
             return
 
         def run_loop():
